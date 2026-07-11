@@ -30,6 +30,7 @@
       (set! (.-textContent (.getElementById js/document "debug-state"))
             (js/JSON.stringify (clj->js {:vertices (count (:positions mesh)) :triangles (/ (count (:indices mesh)) 3)
                                          :maskedVertices masked :mode (name (:mode @state)) :symmetry (:symmetry @state)
+                                         :maskMin (reduce min 1 (:masks mesh)) :maskMax (reduce max 0 (:masks mesh))
                                          :profile (name (:profile @state)) :shortcutBuffer (:shortcut-buffer @state)
                                          :projectVersion project/current-version :revision (:revision @state) :saveStatus (name (:save-status @state))
                                          :layerCount (count (get-in @state [:document :sculpt/layers]))
@@ -143,6 +144,9 @@
  (.addEventListener (.getElementById js/document "spacing") "input" #(swap! state assoc :spacing (js/parseFloat (.. % -target -value))))
  (.addEventListener (.getElementById js/document "clear-mask") "click" #(do (checkpoint!) (swap! state update-in [:document :sculpt/base] sculpt/clear-mask) (upload!)))
  (.addEventListener (.getElementById js/document "invert-mask") "click" #(do (checkpoint!) (swap! state update-in [:document :sculpt/base] sculpt/invert-mask) (upload!)))
+ (doseq [[button-id operation] [["blur-mask" :blur] ["sharpen-mask" :sharpen] ["grow-mask" :grow] ["shrink-mask" :shrink]]]
+   (.addEventListener (.getElementById js/document button-id) "click"
+                      #(do (checkpoint!) (swap! state update-in [:document :sculpt/base] sculpt/filter-mask operation) (upload!))))
  (.addEventListener (.getElementById js/document "subdivide") "click" #(do (checkpoint!) (swap! state update :document sculpt/subdivide-document) (upload!)))
  (.addEventListener (.getElementById js/document "add-layer") "click" #(do (checkpoint!) (swap! state update :document sculpt/add-layer (str "Detail " (inc (count (get-in @state [:document :sculpt/layers]))))) (upload!)))
  (.addEventListener (.getElementById js/document "delete-layer") "click" #(when (> (count (get-in @state [:document :sculpt/layers])) 1) (checkpoint!) (swap! state update :document sculpt/delete-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
