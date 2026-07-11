@@ -52,9 +52,14 @@ button { cursor: pointer; text-align: left; }</style></head>
         <label>Radius<output id="radius-value">0.60</output><input id="radius" type="range" min="0.1" max="1.5" step="0.05" value="0.6"></label>
         <label>Strength<output id="strength-value">0.12</output><input id="strength" type="range" min="-0.3" max="0.3" step="0.01" value="0.12"></label>
         <label>Stroke spacing<input id="spacing" type="range" min="0.02" max="0.5" step="0.01" value="0.12"></label>
+        <h2>Sculpt layers</h2>
+        <div id="layers"></div>
+        <button id="add-layer">＋ Layer</button>
+        <button id="delete-layer">Delete layer</button>
+        <label>Layer opacity<input id="layer-opacity" type="range" min="0" max="1" step="0.05" value="1"></label>
+        <p>Double-click a layer to toggle visibility.</p>
         <h2>Topology</h2>
-        <button class="primary" id="subdivide">Subdivide mesh</button>
-        <p>Shared-edge refinement preserves mask values and enables finer detail.</p>
+        <button class="primary" id="subdivide">Bake &amp; subdivide</button>
       </aside>
     </main>
     <span id="debug-state" style="display:none;"></span>
