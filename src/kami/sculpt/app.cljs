@@ -24,7 +24,7 @@
         (.appendChild container b)))))
 (defn- upload! []
   (when-let [v @viewport]
-    (let [mesh (mesh) masked (count (filter pos? (:masks mesh)))]
+    (let [mesh (mesh) masked (count (filter pos? (:masks mesh))) topology (sculpt/topology-diagnostics mesh)]
       (swap! viewport assoc :buffers (gpu/upload-mesh! (:mesh-context v) mesh))
       (set! (.-textContent (.getElementById js/document "stats")) (str (count (:positions mesh)) " vertices · " (/ (count (:indices mesh)) 3) " triangles · " (:strokes @state) " strokes"))
       (set! (.-textContent (.getElementById js/document "debug-state"))
@@ -37,12 +37,22 @@
                                          :layerNames (mapv :sculpt.layer/name (get-in @state [:document :sculpt/layers]))
                                          :activeLayer (get-in @state [:document :sculpt/active-layer])
                                          :remesh (get-in @state [:document :sculpt/base :remesh])
-                                         :remeshCellSize (:remesh-cell-size @state)}))))
+                                         :remeshCellSize (:remesh-cell-size @state)
+                                         :topology {:manifold (:topology/manifold? topology) :closed (:topology/closed? topology)
+                                                    :boundaryEdges (count (:topology/boundary-edges topology))
+                                                    :nonManifoldEdges (count (:topology/non-manifold-edges topology))
+                                                    :degenerateFaces (count (:topology/degenerate-faces topology))
+                                                    :isolatedVertices (count (:topology/isolated-vertices topology))}})))
       (let [info (get-in @state [:document :sculpt/base :remesh])]
         (set! (.-textContent (.getElementById js/document "remesh-result"))
               (if info (str (:source-vertices info) " → " (:result-vertices info) " vertices · " (:result-triangles info) " triangles")
                 "Not remeshed")))
-    (refresh-layers!)))
+      (set! (.-textContent (.getElementById js/document "topology-result"))
+            (str (if (:topology/manifold? topology) "Manifold" "Topology issues")
+                 " · boundary " (count (:topology/boundary-edges topology))
+                 " · non-manifold " (count (:topology/non-manifold-edges topology))
+                 " · degenerate " (count (:topology/degenerate-faces topology))))
+    (refresh-layers!))))
 (defn- draw! [] (when-let [{:keys [buffers] :as v} @viewport] (when buffers (gpu/render-frame! v buffers [0 1 5] [0 0 0] [0.85 0.42 0.58]))) (js/requestAnimationFrame draw!))
 (defn- pointer-center [canvas e]
   (let [r (.getBoundingClientRect canvas) nx (- (* 2 (/ (- (.-clientX e) (.-left r)) (.-width r))) 1)
