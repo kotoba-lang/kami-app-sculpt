@@ -18,6 +18,7 @@
         (when (= id (:sculpt/active-layer doc)) (.add (.-classList b) "selected"))
         (.addEventListener b "click" #(do (swap! state assoc-in [:document :sculpt/active-layer] id)
                                            (set! (.-value (.getElementById js/document "layer-opacity")) (:sculpt.layer/opacity layer))
+                                           (set! (.-value (.getElementById js/document "layer-name")) (:sculpt.layer/name layer))
                                            (refresh-layers!)))
         (.addEventListener b "dblclick" #(do (checkpoint!) (swap! state update :document sculpt/update-layer id update :sculpt.layer/visible? not) (upload!)))
         (.appendChild container b)))))
@@ -32,6 +33,7 @@
                                          :profile (name (:profile @state)) :shortcutBuffer (:shortcut-buffer @state)
                                          :projectVersion project/current-version :revision (:revision @state) :saveStatus (name (:save-status @state))
                                          :layerCount (count (get-in @state [:document :sculpt/layers]))
+                                         :layerNames (mapv :sculpt.layer/name (get-in @state [:document :sculpt/layers]))
                                          :activeLayer (get-in @state [:document :sculpt/active-layer])}))))
     (refresh-layers!)))
 (defn- draw! [] (when-let [{:keys [buffers] :as v} @viewport] (when buffers (gpu/render-frame! v buffers [0 1 5] [0 0 0] [0.85 0.42 0.58]))) (js/requestAnimationFrame draw!))
@@ -144,6 +146,18 @@
  (.addEventListener (.getElementById js/document "subdivide") "click" #(do (checkpoint!) (swap! state update :document sculpt/subdivide-document) (upload!)))
  (.addEventListener (.getElementById js/document "add-layer") "click" #(do (checkpoint!) (swap! state update :document sculpt/add-layer (str "Detail " (inc (count (get-in @state [:document :sculpt/layers]))))) (upload!)))
  (.addEventListener (.getElementById js/document "delete-layer") "click" #(when (> (count (get-in @state [:document :sculpt/layers])) 1) (checkpoint!) (swap! state update :document sculpt/delete-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
+ (.addEventListener (.getElementById js/document "rename-layer") "click"
+                    #(let [id (get-in @state [:document :sculpt/active-layer]) name (.trim (.-value (.getElementById js/document "layer-name")))]
+                       (when (seq name) (checkpoint!) (swap! state update :document sculpt/update-layer id assoc :sculpt.layer/name name) (upload!))))
+ (.addEventListener (.getElementById js/document "duplicate-layer") "click"
+                    #(do (checkpoint!) (swap! state update :document sculpt/duplicate-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
+ (doseq [[button-id delta] [["layer-up" -1] ["layer-down" 1]]]
+   (.addEventListener (.getElementById js/document button-id) "click"
+                      #(let [id (get-in @state [:document :sculpt/active-layer]) layers (get-in @state [:document :sculpt/layers])
+                             index (first (keep-indexed (fn [i layer] (when (= id (:sculpt.layer/id layer)) i)) layers)) target (+ index delta)]
+                         (when (< -1 target (count layers)) (checkpoint!) (swap! state update :document sculpt/move-layer id target) (upload!)))))
+ (.addEventListener (.getElementById js/document "bake-layer") "click"
+                    #(do (checkpoint!) (swap! state update :document sculpt/bake-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
  (.addEventListener (.getElementById js/document "layer-opacity") "change" #(let [value (js/parseFloat (.. % -target -value)) id (get-in @state [:document :sculpt/active-layer])] (checkpoint!) (swap! state update :document sculpt/update-layer id assoc :sculpt.layer/opacity value) (upload!)))
  (.addEventListener (.getElementById js/document "undo") "click" #(when-let [doc (peek (:history @state))] (swap! state (fn [s] (assoc s :document doc :history (pop (:history s)) :future (conj (:future s) (:document s))))) (upload!)))
  (.addEventListener (.getElementById js/document "redo") "click" (fn [] (when-let [doc (peek (:future @state))] (swap! state (fn [s] (assoc s :document doc :future (pop (:future s)) :history (conj (:history s) (:document s))))) (upload!))))
