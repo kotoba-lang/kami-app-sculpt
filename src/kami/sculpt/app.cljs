@@ -1,9 +1,10 @@
-(ns kami.sculpt.app (:require [kami.sculpt :as sculpt] [kami.webgpu.mesh :as gpu]))
+(ns kami.sculpt.app (:require [cljs.reader :as reader] [kami.sculpt :as sculpt] [kami.sculpt.project :as project] [kami.webgpu.mesh :as gpu]))
 (def base (sculpt/sphere-mesh 1.5 32 20))
 (def initial-document (sculpt/sculpt-document base))
 (defonce state (atom {:document initial-document :mode :inflate :radius 0.6 :strength 0.12 :spacing 0.12
                       :symmetry [:x] :profile :zbrush :shortcut-buffer "" :temporary-mode nil
-                      :history [] :future [] :strokes 0}))
+                      :history [] :future [] :strokes 0 :project-id "untitled-sculpt" :project-name "Untitled Sculpt"
+                      :revision 0 :save-status :clean}))
 (defonce viewport (atom nil))
 (declare checkpoint! upload!)
 (defn- mesh [] (sculpt/evaluate-document (:document @state)))
@@ -29,6 +30,7 @@
             (js/JSON.stringify (clj->js {:vertices (count (:positions mesh)) :triangles (/ (count (:indices mesh)) 3)
                                          :maskedVertices masked :mode (name (:mode @state)) :symmetry (:symmetry @state)
                                          :profile (name (:profile @state)) :shortcutBuffer (:shortcut-buffer @state)
+                                         :projectVersion project/current-version :revision (:revision @state) :saveStatus (name (:save-status @state))
                                          :layerCount (count (get-in @state [:document :sculpt/layers]))
                                          :activeLayer (get-in @state [:document :sculpt/active-layer])}))))
     (refresh-layers!)))
@@ -40,7 +42,8 @@
 (defn- brush-at! [center]
   (let [b (sculpt/brush center (:radius @state) (:strength @state) (:mode @state))]
     (swap! state update :document sculpt/apply-layer-stroke b (:symmetry @state)) (upload!)))
-(defn- checkpoint! [] (swap! state (fn [s] (-> s (update :history conj (:document s)) (assoc :future [])))))
+(defn- checkpoint! [] (swap! state (fn [s] (-> s (update :history conj (:document s))
+                                               (assoc :future [] :save-status :dirty) (update :revision inc)))))
 (defn- set-mode! [mode]
   (swap! state assoc :mode mode :shortcut-buffer "")
   (doseq [button (array-seq (.querySelectorAll js/document "[data-mode]"))]
@@ -52,6 +55,40 @@
 (def zbrush-sequences {"bi" :inflate "bs" :smooth "bp" :pinch})
 (def direct-modes {:blender {"i" :inflate "s" :smooth "p" :pinch "m" :mask "e" :mask-erase}
                    :mudbox {"1" :inflate "2" :smooth "3" :pinch "m" :mask "e" :mask-erase}})
+(def ^:private storage-key "kami.sculpt.project.v2")
+(def ^:private backup-key "kami.sculpt.project.backup")
+(defn- project-document []
+  (let [{:keys [project-id project-name document mode radius strength spacing symmetry profile strokes]} @state]
+    (project/document {:id project-id :name project-name :sculpt-document document
+                       :brush {:mode mode :radius radius :strength strength :spacing spacing}
+                       :symmetry symmetry :interaction {:profile profile} :strokes strokes})))
+(defn- save-project! []
+  (let [data (pr-str (project-document)) old (.getItem js/localStorage storage-key)]
+    (when old (.setItem js/localStorage backup-key old)) (.setItem js/localStorage storage-key data)
+    (swap! state assoc :save-status :saved) (upload!)))
+(defn- sync-controls! []
+  (let [{:keys [radius strength spacing symmetry profile]} @state]
+    (doseq [[id value] [["radius" radius] ["strength" strength] ["spacing" spacing] ["profile" (name profile)]]]
+      (set! (.-value (.getElementById js/document id)) value))
+    (set! (.-textContent (.getElementById js/document "radius-value")) (.toFixed radius 2))
+    (set! (.-textContent (.getElementById js/document "strength-value")) (.toFixed strength 2))
+    (doseq [axis [:x :y :z]] (set! (.-checked (.getElementById js/document (str "symmetry-" (name axis)))) (some #{axis} symmetry)))))
+(defn- apply-project! [value]
+  (let [p (project/open value) brush (:project/brush p) interaction (:project/interaction p)]
+    (swap! state assoc :project-id (:project/id p) :project-name (:project/name p) :document (:project/sculpt p)
+           :mode (:mode brush) :radius (:radius brush) :strength (:strength brush) :spacing (:spacing brush)
+           :symmetry (:project/symmetry p) :profile (:profile interaction) :strokes (:project/strokes p)
+           :history [] :future [] :shortcut-buffer "" :temporary-mode nil :save-status :saved)
+    (sync-controls!) (set-mode! (:mode brush)) (upload!)))
+(defn- load-project! []
+  (when-let [data (.getItem js/localStorage storage-key)]
+    (try (apply-project! (reader/read-string data))
+         (catch :default _ (when-let [backup (.getItem js/localStorage backup-key)] (apply-project! (reader/read-string backup)))))))
+(defn- download-project! []
+  (let [a (.createElement js/document "a") url (.createObjectURL js/URL (js/Blob. #js [(pr-str (project-document))] #js {:type "application/edn"}))]
+    (set! (.-href a) url) (set! (.-download a) "sculpt.kami-sculpt.edn") (.click a) (js/setTimeout #(.revokeObjectURL js/URL url) 0)))
+(defn- import-project! [event]
+  (when-let [file (aget (.. event -target -files) 0)] (-> (.text file) (.then #(apply-project! (reader/read-string %))))))
 (defn- change-radius! [delta]
   (let [radius (max 0.1 (min 1.5 (+ (:radius @state) delta)))]
     (swap! state assoc :radius radius) (set! (.-value (.getElementById js/document "radius")) radius)
@@ -110,4 +147,8 @@
  (.addEventListener (.getElementById js/document "layer-opacity") "change" #(let [value (js/parseFloat (.. % -target -value)) id (get-in @state [:document :sculpt/active-layer])] (checkpoint!) (swap! state update :document sculpt/update-layer id assoc :sculpt.layer/opacity value) (upload!)))
  (.addEventListener (.getElementById js/document "undo") "click" #(when-let [doc (peek (:history @state))] (swap! state (fn [s] (assoc s :document doc :history (pop (:history s)) :future (conj (:future s) (:document s))))) (upload!)))
  (.addEventListener (.getElementById js/document "redo") "click" (fn [] (when-let [doc (peek (:future @state))] (swap! state (fn [s] (assoc s :document doc :future (pop (:future s)) :history (conj (:history s) (:document s))))) (upload!))))
- (.addEventListener (.getElementById js/document "export") "click" #(let [a (.createElement js/document "a")] (set! (.-href a) (.createObjectURL js/URL (js/Blob. #js [(pr-str (:document @state))] #js {:type "application/edn"}))) (set! (.-download a) "sculpt-document.edn") (.click a)))))
+ (.addEventListener (.getElementById js/document "save-project") "click" save-project!)
+ (.addEventListener (.getElementById js/document "load-project") "click" load-project!)
+ (.addEventListener (.getElementById js/document "import") "click" #(.click (.getElementById js/document "import-file")))
+ (.addEventListener (.getElementById js/document "import-file") "change" import-project!)
+ (.addEventListener (.getElementById js/document "export") "click" download-project!)))
