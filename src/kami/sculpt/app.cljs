@@ -2,7 +2,8 @@
 (def base (sculpt/sphere-mesh 1.5 32 20))
 (def initial-document (sculpt/sculpt-document base))
 (defonce state (atom {:document initial-document :mode :inflate :radius 0.6 :strength 0.12 :spacing 0.12
-                      :symmetry [:x] :history [] :future [] :strokes 0}))
+                      :symmetry [:x] :profile :zbrush :shortcut-buffer "" :temporary-mode nil
+                      :history [] :future [] :strokes 0}))
 (defonce viewport (atom nil))
 (declare checkpoint! upload!)
 (defn- mesh [] (sculpt/evaluate-document (:document @state)))
@@ -27,6 +28,7 @@
       (set! (.-textContent (.getElementById js/document "debug-state"))
             (js/JSON.stringify (clj->js {:vertices (count (:positions mesh)) :triangles (/ (count (:indices mesh)) 3)
                                          :maskedVertices masked :mode (name (:mode @state)) :symmetry (:symmetry @state)
+                                         :profile (name (:profile @state)) :shortcutBuffer (:shortcut-buffer @state)
                                          :layerCount (count (get-in @state [:document :sculpt/layers]))
                                          :activeLayer (get-in @state [:document :sculpt/active-layer])}))))
     (refresh-layers!)))
@@ -39,9 +41,55 @@
   (let [b (sculpt/brush center (:radius @state) (:strength @state) (:mode @state))]
     (swap! state update :document sculpt/apply-layer-stroke b (:symmetry @state)) (upload!)))
 (defn- checkpoint! [] (swap! state (fn [s] (-> s (update :history conj (:document s)) (assoc :future [])))))
+(defn- set-mode! [mode]
+  (swap! state assoc :mode mode :shortcut-buffer "")
+  (doseq [button (array-seq (.querySelectorAll js/document "[data-mode]"))]
+    (.toggle (.-classList button) "selected" (= (name mode) (.getAttribute button "data-mode"))))
+  (upload!))
+(defn- editable-target? [event]
+  (let [target (.-target event) tag (some-> target .-tagName .toLowerCase)]
+    (or (#{"input" "select" "textarea"} tag) (.-isContentEditable target))))
+(def zbrush-sequences {"bi" :inflate "bs" :smooth "bp" :pinch})
+(def direct-modes {:blender {"i" :inflate "s" :smooth "p" :pinch "m" :mask "e" :mask-erase}
+                   :mudbox {"1" :inflate "2" :smooth "3" :pinch "m" :mask "e" :mask-erase}})
+(defn- change-radius! [delta]
+  (let [radius (max 0.1 (min 1.5 (+ (:radius @state) delta)))]
+    (swap! state assoc :radius radius) (set! (.-value (.getElementById js/document "radius")) radius)
+    (set! (.-textContent (.getElementById js/document "radius-value")) (.toFixed radius 2)) (upload!)))
+(defn- on-key-down! [event]
+  (when-not (editable-target? event)
+    (let [key (.toLowerCase (.-key event)) ctrl (or (.-ctrlKey event) (.-metaKey event)) profile (:profile @state)]
+      (cond
+        (and ctrl (.-shiftKey event) (= key "n")) (do (.preventDefault event) (.click (.getElementById js/document "add-layer")))
+        (and ctrl (= key "z")) (do (.preventDefault event) (.click (.getElementById js/document "undo")))
+        (= key "[") (do (.preventDefault event) (change-radius! -0.05))
+        (= key "]") (do (.preventDefault event) (change-radius! 0.05))
+        (= key "shift") (when-not (:temporary-mode @state)
+                           (swap! state assoc :temporary-mode (:mode @state)) (set-mode! :smooth))
+        (= profile :zbrush)
+        (cond
+          (= key "m") (set-mode! :mask) (= key "e") (set-mode! :mask-erase)
+          (re-matches #"[a-z]" key)
+          (let [buffer (str (:shortcut-buffer @state) key) mode (get zbrush-sequences buffer)
+                prefix? (some #(.startsWith % buffer) (keys zbrush-sequences))]
+            (.preventDefault event)
+            (cond mode (set-mode! mode) prefix? (swap! state assoc :shortcut-buffer buffer)
+                  :else (swap! state assoc :shortcut-buffer key))))
+        :else (when-let [mode (get-in direct-modes [profile key])] (.preventDefault event) (set-mode! mode))))))
+(defn- on-key-up! [event]
+  (when (and (= "Shift" (.-key event)) (:temporary-mode @state))
+    (let [mode (:temporary-mode @state)] (swap! state assoc :temporary-mode nil) (set-mode! mode))))
 (defn ^:export init! [] (let [canvas (.getElementById js/document "gpu-canvas") dragging (atom false) last-center (atom nil)]
  (-> (gpu/init-canvas! canvas) (.then (fn [v] (reset! viewport v) (upload!) (set! (.-textContent (.getElementById js/document "gpu-status")) "") (draw!))))
- (doseq [b (array-seq (.querySelectorAll js/document "[data-mode]"))] (.addEventListener b "click" #(do (doseq [x (array-seq (.querySelectorAll js/document "[data-mode]"))] (.remove (.-classList x) "selected")) (.add (.-classList b) "selected") (swap! state assoc :mode (keyword (.getAttribute b "data-mode"))))))
+ (doseq [b (array-seq (.querySelectorAll js/document "[data-mode]"))] (.addEventListener b "click" #(set-mode! (keyword (.getAttribute b "data-mode")))))
+ (.addEventListener (.getElementById js/document "profile") "change"
+                    #(do (swap! state assoc :profile (keyword (.. % -target -value)) :shortcut-buffer "")
+                         (set! (.-textContent (.getElementById js/document "profile-hint"))
+                               (case (:profile @state) :blender "I Inflate · S Smooth · P Pinch · M Mask"
+                                     :mudbox "1 Sculpt · 2 Smooth · 3 Pinch · M Mask"
+                                     "B,I Inflate · B,S Smooth · B,P Pinch · M Mask")) (upload!)))
+ (.addEventListener js/window "keydown" on-key-down!)
+ (.addEventListener js/window "keyup" on-key-up!)
  (.addEventListener canvas "pointerdown" #(let [center (pointer-center canvas %)] (reset! dragging true) (reset! last-center center) (checkpoint!) (swap! state update :strokes inc) (brush-at! center)))
  (.addEventListener js/window "pointerup" #(do (reset! dragging false) (reset! last-center nil)))
  (.addEventListener canvas "pointermove" #(when @dragging

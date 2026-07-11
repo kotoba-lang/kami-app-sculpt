@@ -22,6 +22,11 @@ button { cursor: pointer; text-align: left; }</style></head>
       <a href="https://kotoba-lang.github.io/kami-studio/">Studio</a>
       <span>WebGPU brush workspace</span>
       <span class="spacer"></span>
+      <select id="profile" aria-label="Interaction profile">
+        <option value="zbrush">ZBrush</option>
+        <option value="blender">Blender Sculpt</option>
+        <option value="mudbox">Mudbox</option>
+      </select>
       <button id="undo">Undo stroke</button>
       <button id="redo">Redo</button>
       <button id="export">Export EDN</button>
@@ -29,6 +34,7 @@ button { cursor: pointer; text-align: left; }</style></head>
     <main>
       <aside>
         <h2>Brushes</h2>
+        <p id="profile-hint">B,I Inflate · B,S Smooth · B,P Pinch · M Mask</p>
         <button class="selected" data-mode="inflate">Inflate</button>
         <button data-mode="smooth">Smooth</button>
         <button data-mode="pinch">Pinch</button>
@@ -57,7 +63,7 @@ button { cursor: pointer; text-align: left; }</style></head>
         <button id="add-layer">＋ Layer</button>
         <button id="delete-layer">Delete layer</button>
         <label>Layer opacity<input id="layer-opacity" type="range" min="0" max="1" step="0.05" value="1"></label>
-        <p>Double-click a layer to toggle visibility.</p>
+        <p>Double-click a layer to toggle visibility. Ctrl+Shift+N adds a layer.</p>
         <h2>Topology</h2>
         <button class="primary" id="subdivide">Bake &amp; subdivide</button>
       </aside>
