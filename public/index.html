@@ -32,13 +32,15 @@ button { cursor: pointer; text-align: left; }</style></head>
         <button class="selected" data-mode="inflate">Inflate</button>
         <button data-mode="smooth">Smooth</button>
         <button data-mode="pinch">Pinch</button>
+        <button data-mode="mask">Mask</button>
+        <button data-mode="mask-erase">Erase mask</button>
+        <h2>Mask</h2>
+        <button id="clear-mask">Clear mask</button>
+        <button id="invert-mask">Invert mask</button>
         <h2>Symmetry</h2>
-        <select id="symmetry">
-          <option value="x">X mirror</option>
-          <option value="">Off</option>
-          <option value="y">Y mirror</option>
-          <option value="z">Z mirror</option>
-        </select>
+        <label><input id="symmetry-x" type="checkbox" checked>X mirror</label>
+        <label><input id="symmetry-y" type="checkbox">Y mirror</label>
+        <label><input id="symmetry-z" type="checkbox">Z mirror</label>
       </aside>
       <section class="viewport">
         <canvas id="gpu-canvas" aria-label="Sculpt WebGPU viewport"></canvas>
@@ -49,12 +51,13 @@ button { cursor: pointer; text-align: left; }</style></head>
         <h2>Brush settings</h2>
         <label>Radius<output id="radius-value">0.60</output><input id="radius" type="range" min="0.1" max="1.5" step="0.05" value="0.6"></label>
         <label>Strength<output id="strength-value">0.12</output><input id="strength" type="range" min="-0.3" max="0.3" step="0.01" value="0.12"></label>
-        <h2>Layers</h2>
-        <button class="primary">Base form</button>
-        <button>Detail layer</button>
-        <p>Drag directly on the clay to apply deterministic mesh strokes.</p>
+        <label>Stroke spacing<input id="spacing" type="range" min="0.02" max="0.5" step="0.01" value="0.12"></label>
+        <h2>Topology</h2>
+        <button class="primary" id="subdivide">Subdivide mesh</button>
+        <p>Shared-edge refinement preserves mask values and enables finer detail.</p>
       </aside>
     </main>
+    <span id="debug-state" style="display:none;"></span>
     <script src="./js/app.js"></script>
   </body>
 </html>
