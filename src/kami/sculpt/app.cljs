@@ -37,6 +37,7 @@
                                          :layerNames (mapv :sculpt.layer/name (get-in @state [:document :sculpt/layers]))
                                          :activeLayer (get-in @state [:document :sculpt/active-layer])
                                          :remesh (get-in @state [:document :sculpt/base :remesh])
+                                         :repair (get-in @state [:document :sculpt/base :repair])
                                          :remeshCellSize (:remesh-cell-size @state)
                                          :topology {:manifold (:topology/manifold? topology) :closed (:topology/closed? topology)
                                                     :boundaryEdges (count (:topology/boundary-edges topology))
@@ -52,6 +53,9 @@
                  " · boundary " (count (:topology/boundary-edges topology))
                  " · non-manifold " (count (:topology/non-manifold-edges topology))
                  " · degenerate " (count (:topology/degenerate-faces topology))))
+      (let [repair (get-in @state [:document :sculpt/base :repair])]
+        (set! (.-textContent (.getElementById js/document "repair-result"))
+              (if repair (str "Removed " (:removed-triangles repair) " triangles") "Not repaired")))
     (refresh-layers!))))
 (defn- draw! [] (when-let [{:keys [buffers] :as v} @viewport] (when buffers (gpu/render-frame! v buffers [0 1 5] [0 0 0] [0.85 0.42 0.58]))) (js/requestAnimationFrame draw!))
 (defn- pointer-center [canvas e]
@@ -169,6 +173,8 @@
                     #(swap! state assoc :remesh-cell-size (max 0.01 (js/parseFloat (.. % -target -value))) :save-status :dirty))
  (.addEventListener (.getElementById js/document "voxel-remesh") "click"
                     #(do (checkpoint!) (swap! state update :document sculpt/remesh-document (:remesh-cell-size @state)) (upload!)))
+ (.addEventListener (.getElementById js/document "repair-topology") "click"
+                    #(do (checkpoint!) (swap! state update :document sculpt/repair-document) (upload!)))
  (.addEventListener (.getElementById js/document "add-layer") "click" #(do (checkpoint!) (swap! state update :document sculpt/add-layer (str "Detail " (inc (count (get-in @state [:document :sculpt/layers]))))) (upload!)))
  (.addEventListener (.getElementById js/document "delete-layer") "click" #(when (> (count (get-in @state [:document :sculpt/layers])) 1) (checkpoint!) (swap! state update :document sculpt/delete-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
  (.addEventListener (.getElementById js/document "rename-layer") "click"
