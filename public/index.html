@@ -15,7 +15,7 @@ header .spacer { flex: 1; }
 #gpu-status { position: absolute; left: 50%; top: 45%; transform: translate(-50%,-50%); color: #ffb0b0; }
 aside { padding: 16px; background: #21192a; border-right: 1px solid #51375e; }
 header { display: flex; align-items: center; gap: 18px; padding: 0 16px; background: #2a2034; }
-button { cursor: pointer; text-align: left; }</style></head>
+button { cursor: pointer; text-align: left; } :focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }</style></head>
   <body>
     <header>
       <strong>KAMI SCULPT · DIGITAL CLAY</strong>
@@ -32,7 +32,7 @@ button { cursor: pointer; text-align: left; }</style></head>
       <button id="save-project">Save</button>
       <button id="load-project">Load</button>
       <button id="import">Import</button>
-      <input id="import-file" type="file" accept=".edn,.kami-sculpt.edn" style="display:none;">
+      <input id="import-file" aria-label="Import Sculpt project file" type="file" accept=".edn,.kami-sculpt.edn" style="display:none;">
       <button id="export">Export Project</button>
     </header>
     <main>
