@@ -38,6 +38,7 @@
                                          :activeLayer (get-in @state [:document :sculpt/active-layer])
                                          :remesh (get-in @state [:document :sculpt/base :remesh])
                                          :repair (get-in @state [:document :sculpt/base :repair])
+                                         :holeFill (get-in @state [:document :sculpt/base :hole-fill])
                                          :remeshCellSize (:remesh-cell-size @state)
                                          :topology {:manifold (:topology/manifold? topology) :closed (:topology/closed? topology)
                                                     :boundaryEdges (count (:topology/boundary-edges topology))
@@ -56,6 +57,9 @@
       (let [repair (get-in @state [:document :sculpt/base :repair])]
         (set! (.-textContent (.getElementById js/document "repair-result"))
               (if repair (str "Removed " (:removed-triangles repair) " triangles") "Not repaired")))
+      (let [fill (get-in @state [:document :sculpt/base :hole-fill])]
+        (set! (.-textContent (.getElementById js/document "hole-fill-result"))
+              (if fill (str "Filled " (:holes fill) " holes · " (:triangles fill) " triangles") "No fill operation")))
     (refresh-layers!))))
 (defn- draw! [] (when-let [{:keys [buffers] :as v} @viewport] (when buffers (gpu/render-frame! v buffers [0 1 5] [0 0 0] [0.85 0.42 0.58]))) (js/requestAnimationFrame draw!))
 (defn- pointer-center [canvas e]
@@ -175,6 +179,9 @@
                     #(do (checkpoint!) (swap! state update :document sculpt/remesh-document (:remesh-cell-size @state)) (upload!)))
  (.addEventListener (.getElementById js/document "repair-topology") "click"
                     #(do (checkpoint!) (swap! state update :document sculpt/repair-document) (upload!)))
+ (.addEventListener (.getElementById js/document "fill-holes") "click"
+                    #(try (do (checkpoint!) (swap! state update :document sculpt/fill-holes-document) (upload!))
+                          (catch :default error (set! (.-textContent (.getElementById js/document "hole-fill-result")) (.-message error)))))
  (.addEventListener (.getElementById js/document "add-layer") "click" #(do (checkpoint!) (swap! state update :document sculpt/add-layer (str "Detail " (inc (count (get-in @state [:document :sculpt/layers]))))) (upload!)))
  (.addEventListener (.getElementById js/document "delete-layer") "click" #(when (> (count (get-in @state [:document :sculpt/layers])) 1) (checkpoint!) (swap! state update :document sculpt/delete-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
  (.addEventListener (.getElementById js/document "rename-layer") "click"
