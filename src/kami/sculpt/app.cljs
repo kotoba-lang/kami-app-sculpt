@@ -1,7 +1,7 @@
 (ns kami.sculpt.app (:require [cljs.reader :as reader] [kami.sculpt :as sculpt] [kami.sculpt.project :as project] [kami.webgpu.mesh :as gpu]))
 (def base (sculpt/sphere-mesh 1.5 32 20))
 (def initial-document (sculpt/sculpt-document base))
-(defonce state (atom {:document initial-document :mode :inflate :radius 0.6 :strength 0.12 :spacing 0.12
+(defonce state (atom {:document initial-document :mode :inflate :radius 0.6 :strength 0.12 :spacing 0.12 :remesh-cell-size 0.15
                       :symmetry [:x] :profile :zbrush :shortcut-buffer "" :temporary-mode nil
                       :history [] :future [] :strokes 0 :project-id "untitled-sculpt" :project-name "Untitled Sculpt"
                       :revision 0 :save-status :clean}))
@@ -35,7 +35,13 @@
                                          :projectVersion project/current-version :revision (:revision @state) :saveStatus (name (:save-status @state))
                                          :layerCount (count (get-in @state [:document :sculpt/layers]))
                                          :layerNames (mapv :sculpt.layer/name (get-in @state [:document :sculpt/layers]))
-                                         :activeLayer (get-in @state [:document :sculpt/active-layer])}))))
+                                         :activeLayer (get-in @state [:document :sculpt/active-layer])
+                                         :remesh (get-in @state [:document :sculpt/base :remesh])
+                                         :remeshCellSize (:remesh-cell-size @state)}))))
+      (let [info (get-in @state [:document :sculpt/base :remesh])]
+        (set! (.-textContent (.getElementById js/document "remesh-result"))
+              (if info (str (:source-vertices info) " → " (:result-vertices info) " vertices · " (:result-triangles info) " triangles")
+                "Not remeshed")))
     (refresh-layers!)))
 (defn- draw! [] (when-let [{:keys [buffers] :as v} @viewport] (when buffers (gpu/render-frame! v buffers [0 1 5] [0 0 0] [0.85 0.42 0.58]))) (js/requestAnimationFrame draw!))
 (defn- pointer-center [canvas e]
@@ -61,17 +67,17 @@
 (def ^:private storage-key "kami.sculpt.project.v2")
 (def ^:private backup-key "kami.sculpt.project.backup")
 (defn- project-document []
-  (let [{:keys [project-id project-name document mode radius strength spacing symmetry profile strokes]} @state]
+  (let [{:keys [project-id project-name document mode radius strength spacing remesh-cell-size symmetry profile strokes]} @state]
     (project/document {:id project-id :name project-name :sculpt-document document
-                       :brush {:mode mode :radius radius :strength strength :spacing spacing}
+                       :brush {:mode mode :radius radius :strength strength :spacing spacing :remesh-cell-size remesh-cell-size}
                        :symmetry symmetry :interaction {:profile profile} :strokes strokes})))
 (defn- save-project! []
   (let [data (pr-str (project-document)) old (.getItem js/localStorage storage-key)]
     (when old (.setItem js/localStorage backup-key old)) (.setItem js/localStorage storage-key data)
     (swap! state assoc :save-status :saved) (upload!)))
 (defn- sync-controls! []
-  (let [{:keys [radius strength spacing symmetry profile]} @state]
-    (doseq [[id value] [["radius" radius] ["strength" strength] ["spacing" spacing] ["profile" (name profile)]]]
+  (let [{:keys [radius strength spacing remesh-cell-size symmetry profile]} @state]
+    (doseq [[id value] [["radius" radius] ["strength" strength] ["spacing" spacing] ["remesh-cell-size" remesh-cell-size] ["profile" (name profile)]]]
       (set! (.-value (.getElementById js/document id)) value))
     (set! (.-textContent (.getElementById js/document "radius-value")) (.toFixed radius 2))
     (set! (.-textContent (.getElementById js/document "strength-value")) (.toFixed strength 2))
@@ -80,6 +86,7 @@
   (let [p (project/open value) brush (:project/brush p) interaction (:project/interaction p)]
     (swap! state assoc :project-id (:project/id p) :project-name (:project/name p) :document (:project/sculpt p)
            :mode (:mode brush) :radius (:radius brush) :strength (:strength brush) :spacing (:spacing brush)
+           :remesh-cell-size (:remesh-cell-size brush 0.15)
            :symmetry (:project/symmetry p) :profile (:profile interaction) :strokes (:project/strokes p)
            :history [] :future [] :shortcut-buffer "" :temporary-mode nil :save-status :saved)
     (sync-controls!) (set-mode! (:mode brush)) (upload!)))
@@ -148,6 +155,10 @@
    (.addEventListener (.getElementById js/document button-id) "click"
                       #(do (checkpoint!) (swap! state update-in [:document :sculpt/base] sculpt/filter-mask operation) (upload!))))
  (.addEventListener (.getElementById js/document "subdivide") "click" #(do (checkpoint!) (swap! state update :document sculpt/subdivide-document) (upload!)))
+ (.addEventListener (.getElementById js/document "remesh-cell-size") "change"
+                    #(swap! state assoc :remesh-cell-size (max 0.01 (js/parseFloat (.. % -target -value))) :save-status :dirty))
+ (.addEventListener (.getElementById js/document "voxel-remesh") "click"
+                    #(do (checkpoint!) (swap! state update :document sculpt/remesh-document (:remesh-cell-size @state)) (upload!)))
  (.addEventListener (.getElementById js/document "add-layer") "click" #(do (checkpoint!) (swap! state update :document sculpt/add-layer (str "Detail " (inc (count (get-in @state [:document :sculpt/layers]))))) (upload!)))
  (.addEventListener (.getElementById js/document "delete-layer") "click" #(when (> (count (get-in @state [:document :sculpt/layers])) 1) (checkpoint!) (swap! state update :document sculpt/delete-layer (get-in @state [:document :sculpt/active-layer])) (upload!)))
  (.addEventListener (.getElementById js/document "rename-layer") "click"
