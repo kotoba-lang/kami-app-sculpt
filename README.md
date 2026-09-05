@@ -16,16 +16,18 @@ re-implements geometry.
 
 - **Brushes** — inflate, smooth, pinch, mask, erase-mask, with radius,
   strength and stroke spacing.
-- **Masking** — clear and invert; masked vertices are reported in the debug
-  state so tests can assert on them.
+- **Masking** — clear, invert, grow, shrink, blur, sharpen; the masked-vertex
+  count is reported in the debug state so tests can assert on it.
 - **Symmetry** — independent X / Y / Z mirroring.
-- **Sculpt layers** — add, delete, rename, reorder by opacity, toggle
-  visibility (double-click); one active layer receives strokes.
-- **Topology** — bake & subdivide, remesh at a chosen cell size, repair, and
-  boundary hole fill, each reporting before/after counts.
-- **Undo / redo** per stroke, with a save-status flag (`clean` / `dirty` /
-  `saved`).
-- **Project import / export** as EDN.
+- **Sculpt layers** — add, duplicate, delete, rename, move up/down, opacity,
+  bake down, and toggle visibility (double-click); one active layer receives
+  strokes.
+- **Topology** — bake & subdivide, voxel remesh at a chosen cell size, repair,
+  and boundary hole fill, each reporting its before/after counts next to the
+  button.
+- **Undo / redo** per stroke, with a revision counter and a save-status flag
+  (`clean` / `dirty` / `saved`).
+- **Project save / load and EDN import / export.**
 
 ### Interaction profiles
 
@@ -39,8 +41,9 @@ carries all three:
 | Mudbox | `1` sculpt · `2` smooth · `3` pinch · `M` mask · `E` erase mask |
 
 ZBrush uses a two-key prefix buffer; the other two dispatch directly.
-`Ctrl+Shift+N` adds a layer. Holding a modifier can temporarily swap the
-brush without changing the selection.
+`Ctrl+Shift+N` adds a layer. Holding **Shift** temporarily switches to smooth
+and restores the previous brush on release, so the selection in the panel
+never changes.
 
 ## Project file
 
@@ -76,13 +79,17 @@ dependency, so both are exercised by the JVM test run.
 ## Build and run
 
 ```bash
-clojure -M:test                       # project round-trip / migration / rejection
-clojure -M:cljs -m clojure.main build.clj   # regenerate public/index.html from ui/page
-npm run build                         # shadow-cljs release -> public/js/app.js
+clojure -M:test                        # project round-trip / migration / rejection
+clojure -M build.clj                   # regenerate public/index.html from ui/page
+npm run build                          # shadow-cljs release -> public/js/app.js
 ```
 
 `public/index.html` is **generated** from `kami.sculpt.ui/page` — edit the
-hiccup, not the HTML. Serve `public/` over http (WebGPU needs a secure
+hiccup, not the HTML. The build is idempotent, so
+`clojure -M build.clj && git diff --exit-code public/index.html` is a usable
+check that the generator and the shipped page still agree; they had drifted
+apart once, and regenerating from the stale generator would have deleted 22
+controls that `app.cljs` binds handlers to. Serve `public/` over http (WebGPU needs a secure
 context; `localhost` counts) and open it in a WebGPU-capable browser. Without
 WebGPU the viewport shows a status message instead of silently rendering
 nothing.
