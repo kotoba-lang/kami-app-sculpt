@@ -69,9 +69,9 @@ from the engine (wrapped with defaults). Anything else is rejected.
 
 | file | role |
 |---|---|
-| `src/kami/sculpt/project.cljc` | project document, versioning, migration, validation |
-| `src/kami/sculpt/ui.cljc` | the page — hiccup via `html.core`, styles via `css.core` |
-| `src/kami/sculpt/app.cljs` | browser app: state atom, events, shortcuts, GPU upload |
+| `src/kami/sculpt/project.cljk` | project document, versioning, migration, validation |
+| `src/kami/sculpt/ui.cljk` | the page — hiccup via `html.core`, styles via `css.core` |
+| `src/kami/sculpt/app.cljk` | browser app: state atom, events, shortcuts, GPU upload |
 
 `ui.cljc` and `project.cljc` are portable `.cljc` and carry no browser
 dependency, so both are exercised by the JVM test run.
@@ -80,13 +80,13 @@ dependency, so both are exercised by the JVM test run.
 
 ```bash
 clojure -M:test                        # project round-trip / migration / rejection
-clojure -M build.clj                   # regenerate public/index.html from ui/page
+clojure -M build.cljk                   # regenerate public/index.html from ui/page
 npm run build                          # shadow-cljs release -> public/js/app.js
 ```
 
 `public/index.html` is **generated** from `kami.sculpt.ui/page` — edit the
 hiccup, not the HTML. The build is idempotent, so
-`clojure -M build.clj && git diff --exit-code public/index.html` is a usable
+`clojure -M build.cljk && git diff --exit-code public/index.html` is a usable
 check that the generator and the shipped page still agree; they had drifted
 apart once, and regenerating from the stale generator would have deleted 22
 controls that `app.cljs` binds handlers to. Serve `public/` over http (WebGPU needs a secure
