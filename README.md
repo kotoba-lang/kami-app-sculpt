@@ -79,14 +79,14 @@ dependency, so both are exercised by the JVM test run.
 ## Build and run
 
 ```bash
-clojure -M:test                        # project round-trip / migration / rejection
-clojure -M build.cljk                   # regenerate public/index.html from ui/page
-npm run build                          # shadow-cljs release -> public/js/app.js
+kbb -M:test                        # project round-trip / migration / rejection
+kbb -M build.cljk                   # regenerate public/index.html from ui/page
+npm run build                          # amu compile --target wasm32-browser -> public/js/app.js
 ```
 
 `public/index.html` is **generated** from `kami.sculpt.ui/page` — edit the
 hiccup, not the HTML. The build is idempotent, so
-`clojure -M build.cljk && git diff --exit-code public/index.html` is a usable
+`kbb -M build.cljk && git diff --exit-code public/index.html` is a usable
 check that the generator and the shipped page still agree; they had drifted
 apart once, and regenerating from the stale generator would have deleted 22
 controls that `app.cljs` binds handlers to. Serve `public/` over http (WebGPU needs a secure
