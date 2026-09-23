@@ -1,4 +1,4 @@
-(ns kami.sculpt.project-test (:require [clojure.test :refer [deftest is]] [kami.sculpt :as sculpt] [kami.sculpt.project :as project]))
+(ns kami.sculpt.project-test (:require [kotoba.test :refer [deftest is]] [kami.sculpt :as sculpt] [kami.sculpt.project :as project]))
 (def doc (-> (sculpt/sculpt-document (sculpt/sphere-mesh 1 8 6)) (sculpt/add-layer "Detail")))
 (deftest round-trip
   (let [p (project/document {:id "head" :name "Head" :sculpt-document doc :brush {:mode :pinch :radius 0.3 :strength 0.1 :spacing 0.05}
